@@ -107,24 +107,10 @@ def create_or_update_genie(
 
         operation = "created"
 
-    # When serialized_space is provided, use the public genie/spaces API
-    if serialized_space:
-        if space_id:
-            # Update existing space with serialized config
-            manager.genie_update_with_serialized_space(
-                space_id=space_id,
-                serialized_space=serialized_space,
-                title=display_name,
-                description=description,
-                warehouse_id=warehouse_id,
-            )
-            operation = "updated"
-        else:
-            # Check if exists by name, then create or update
-            existing = manager.genie_find_by_name(display_name)
-            if existing:
-                operation = "updated"
-                space_id = existing.space_id
+        # When serialized_space is provided
+        if serialized_space:
+            if space_id:
+                # Update existing space with serialized config
                 manager.genie_update_with_serialized_space(
                     space_id=space_id,
                     serialized_space=serialized_space,
@@ -132,79 +118,95 @@ def create_or_update_genie(
                     description=description,
                     warehouse_id=warehouse_id,
                 )
-            else:
-                result = manager.genie_import(
-                    warehouse_id=warehouse_id,
-                    serialized_space=serialized_space,
-                    title=display_name,
-                    description=description,
-                )
-                space_id = result.get("space_id", "")
-    else:
-        if space_id:
-            # Update existing space by ID
-            existing = manager.genie_get(space_id)
-            if existing:
                 operation = "updated"
-                manager.genie_update(
-                    space_id=space_id,
-                    display_name=display_name,
-                    description=description,
-                    warehouse_id=warehouse_id,
-                    table_identifiers=table_identifiers,
-                    sample_questions=sample_questions,
-                )
             else:
-                return {"error": f"Genie space {space_id} not found"}
+                # Check if exists by name, then create or update
+                existing = manager.genie_find_by_name(display_name)
+                if existing:
+                    operation = "updated"
+                    space_id = existing.space_id
+                    manager.genie_update_with_serialized_space(
+                        space_id=space_id,
+                        serialized_space=serialized_space,
+                        title=display_name,
+                        description=description,
+                        warehouse_id=warehouse_id,
+                    )
+                else:
+                    result = manager.genie_import(
+                        warehouse_id=warehouse_id,
+                        serialized_space=serialized_space,
+                        title=display_name,
+                        description=description,
+                    )
+                    space_id = result.get("space_id", "")
+        
+        # When serialized_space is not provided
         else:
-            # Check if exists by name first
-            existing = manager.genie_find_by_name(display_name)
-            if existing:
-                operation = "updated"
-                manager.genie_update(
-                    space_id=existing.space_id,
-                    display_name=display_name,
-                    description=description,
-                    warehouse_id=warehouse_id,
-                    table_identifiers=table_identifiers,
-                    sample_questions=sample_questions,
-                )
-                space_id = existing.space_id
-            else:
-                # Create new
-                result = manager.genie_create(
-                    display_name=display_name,
-                    warehouse_id=warehouse_id,
-                    table_identifiers=table_identifiers,
-                    description=description,
-                )
-                space_id = result.get("space_id", "")
-
-                # Add sample questions if provided
-                if sample_questions and space_id:
-                    manager.genie_add_sample_questions_batch(space_id, sample_questions)
-
-        response = {
-            "space_id": space_id,
-            "display_name": display_name,
-            "operation": operation,
-            "warehouse_id": warehouse_id,
-            "table_count": len(table_identifiers),
-        }
-
-        try:
             if space_id:
-                from ..manifest import track_resource
+                # Update existing space by ID
+                existing = manager.genie_get(space_id)
+                if existing:
+                    operation = "updated"
+                    manager.genie_update(
+                        space_id=space_id,
+                        display_name=display_name,
+                        description=description,
+                        warehouse_id=warehouse_id,
+                        table_identifiers=table_identifiers,
+                        sample_questions=sample_questions,
+                    )
+                else:
+                    return {"error": f"Genie space {space_id} not found"}
+            else:
+                # Check if exists by name first
+                existing = manager.genie_find_by_name(display_name)
+                if existing:
+                    operation = "updated"
+                    manager.genie_update(
+                        space_id=existing.space_id,
+                        display_name=display_name,
+                        description=description,
+                        warehouse_id=warehouse_id,
+                        table_identifiers=table_identifiers,
+                        sample_questions=sample_questions,
+                    )
+                    space_id = existing.space_id
+                else:
+                    # Create new
+                    result = manager.genie_create(
+                        display_name=display_name,
+                        warehouse_id=warehouse_id,
+                        table_identifiers=table_identifiers,
+                        description=description,
+                    )
+                    space_id = result.get("space_id", "")
 
-                track_resource(
-                    resource_type="genie_space",
-                    name=display_name,
-                    resource_id=space_id,
-                )
-        except Exception:
-            pass
+                    # Add sample questions if provided
+                    if sample_questions and space_id:
+                        manager.genie_add_sample_questions_batch(space_id, sample_questions)
 
-        return response
+            response = {
+                "space_id": space_id,
+                "display_name": display_name,
+                "operation": operation,
+                "warehouse_id": warehouse_id,
+                "table_count": len(table_identifiers),
+            }
+
+            try:
+                if space_id:
+                    from ..manifest import track_resource
+
+                    track_resource(
+                        resource_type="genie_space",
+                        name=display_name,
+                        resource_id=space_id,
+                    )
+            except Exception:
+                pass
+
+            return response
 
     except Exception as e:
         return {"error": f"Failed to create/update Genie space '{display_name}': {e}"}
