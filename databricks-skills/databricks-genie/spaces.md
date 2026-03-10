@@ -4,12 +4,7 @@ This guide covers creating and managing Genie Spaces for SQL-based data explorat
 
 ## What is a Genie Space?
 
-A Genie Space connects to Unity Catalog tables and translates natural language questions into SQL queries. The system:
-
-1. **Understands** the table schemas and relationships
-2. **Generates** SQL queries from natural language
-3. **Executes** queries on a SQL warehouse
-4. **Presents** results in a conversational format
+A Genie Space connects to Unity Catalog tables and translates natural language questions into SQL — understanding schemas, generating queries, executing them on a SQL warehouse, and presenting results conversationally.
 
 ## Creation Workflow
 
@@ -319,24 +314,7 @@ After migration, update `databricks.yml` with the new dev `space_id` values unde
 
 ### Updating an Existing Space with New Config
 
-Use `create_or_update_genie` with `serialized_space` to push a config to an already-existing space without creating a new one:
-
-```python
-# 1. Export from dev
-dev_space = export_genie(space_id=DEV_SPACE_ID)
-
-# 2. Remap catalog if environments use different catalog names
-remapped = dev_space["serialized_space"].replace("dev_catalog", "prod_catalog")
-
-# 3. Push to prod (updates in place)
-create_or_update_genie(
-    display_name="Sales Analytics",
-    table_identifiers=[],      # ignored when serialized_space is provided
-    space_id=PROD_SPACE_ID,
-    warehouse_id=PROD_WAREHOUSE_ID,
-    serialized_space=remapped
-)
-```
+To push a serialized config to an already-existing space (rather than creating a new one), use `create_or_update_genie` with `space_id=` and `serialized_space=`. The export → remap → push pattern is identical to the migration steps above; just replace `import_genie` with `create_or_update_genie(space_id=TARGET_SPACE_ID, ...)` as the final call.
 
 ### Permissions Required
 
@@ -386,3 +364,27 @@ create_or_update_genie(
 - Add table and column comments
 - Include sample questions that demonstrate the vocabulary
 - Add instructions via the Databricks Genie UI
+
+### `export_genie` returns empty `serialized_space`
+
+Requires at least **CAN EDIT** permission on the space.
+
+### `import_genie` fails with permission error
+
+Ensure you have CREATE privileges in the target workspace folder.
+
+### Tables not found after migration
+
+Catalog name was not remapped — replace the source catalog name in `serialized_space` before calling `import_genie`. The catalog appears in table identifiers, SQL FROM clauses, join specs, and filter snippets; a single `.replace(src_catalog, tgt_catalog)` on the whole string covers all occurrences.
+
+### `export_genie` / `import_genie` land in the wrong workspace
+
+Each MCP server is workspace-scoped. Set up two named MCP server entries (one per profile) in your IDE's MCP config instead of switching a single server's profile mid-session.
+
+### MCP server doesn't pick up profile change
+
+The MCP process reads `DATABRICKS_CONFIG_PROFILE` once at startup — editing the config file requires an IDE reload to take effect.
+
+### `import_genie` fails with JSON parse error
+
+The `serialized_space` string may contain multi-line SQL arrays with `\n` escape sequences. Flatten SQL arrays to single-line strings before passing to avoid double-escaping issues.

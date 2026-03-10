@@ -1004,7 +1004,7 @@ class AgentBricksManager:
             space_id: The Genie space ID to update
             serialized_space: The JSON string containing the new space configuration.
                 Obtain from genie_export() or construct manually:
-                '{"version":1,"data_sources":{"tables":[{"identifier":"cat.schema.table"}]}}'
+                '{"version":2,"data_sources":{"tables":[{"identifier":"cat.schema.table"}]}}'
             title: Optional title override
             description: Optional description override
             warehouse_id: Optional warehouse override

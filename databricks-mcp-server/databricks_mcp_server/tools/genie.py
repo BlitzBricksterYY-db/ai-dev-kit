@@ -186,27 +186,27 @@ def create_or_update_genie(
                     if sample_questions and space_id:
                         manager.genie_add_sample_questions_batch(space_id, sample_questions)
 
-            response = {
-                "space_id": space_id,
-                "display_name": display_name,
-                "operation": operation,
-                "warehouse_id": warehouse_id,
-                "table_count": len(table_identifiers),
-            }
+        response = {
+            "space_id": space_id,
+            "display_name": display_name,
+            "operation": operation,
+            "warehouse_id": warehouse_id,
+            "table_count": len(table_identifiers),
+        }
 
-            try:
-                if space_id:
-                    from ..manifest import track_resource
+        try:
+            if space_id:
+                from ..manifest import track_resource
 
-                    track_resource(
-                        resource_type="genie_space",
-                        name=display_name,
-                        resource_id=space_id,
-                    )
-            except Exception:
-                pass
+                track_resource(
+                    resource_type="genie_space",
+                    name=display_name,
+                    resource_id=space_id,
+                )
+        except Exception:
+            pass
 
-            return response
+        return response
 
     except Exception as e:
         return {"error": f"Failed to create/update Genie space '{display_name}': {e}"}
@@ -398,7 +398,7 @@ def import_genie(
         serialized_space: The JSON string from export_genie() containing the full
             space configuration (tables, instructions, SQL queries, layout).
             Can also be constructed manually:
-            '{"version":1,"data_sources":{"tables":[{"identifier":"cat.schema.table"}]}}'
+            '{"version":2,"data_sources":{"tables":[{"identifier":"cat.schema.table"}]}}'
         title: Optional title override (defaults to the exported space's title)
         description: Optional description override
         parent_path: Optional workspace folder path where the space will be registered

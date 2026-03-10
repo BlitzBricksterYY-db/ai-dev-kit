@@ -107,103 +107,12 @@ Clone to a new space (same catalog):
 import_genie(
     warehouse_id=exported["warehouse_id"],
     serialized_space=exported["serialized_space"],
-    title=exported["title"],,  # override title; omit to keep original
+    title=exported["title"],  # override title; omit to keep original
     description=exported["description"],
 )
 ```
 
-#### Example: Migrating Genie Spaces from Prod to Dev
-
-When migrating Genie Spaces between environments (e.g., from a `prod` target to a `dev` target defined in your `databricks.yml`), you must update the catalog references within the serialized space.
-
-**Note:** Genie Space migration assumes that the underlying data assets (schemas and tables) remain structurally identical across environments. The migration of the actual catalogs, schemas, or tables themselves is outside the scope of Genie Space migration skills.
-
-##### The Challenge: MCP Servers Are Workspace-Scoped
-
-Each Databricks MCP server instance connects to exactly one workspace (set via `DATABRICKS_CONFIG_PROFILE` at startup). This means a single MCP server cannot export from PROD and import into DEV in the same session — you need two server instances.
-
-##### Recommended Setup: Dual MCP Server Profiles
-
-Configure two Databricks MCP server entries in your IDE's MCP config (e.g. `~/.cursor/mcp.json`), one per workspace:
-
-```json
-"databricks-prod": {
-  "command": "/path/to/.venv/bin/python",
-  "args": ["/path/to/databricks-mcp-server/run_server.py"],
-  "env": { "DATABRICKS_CONFIG_PROFILE": "prod" }
-},
-"databricks-dev": {
-  "command": "/path/to/.venv/bin/python",
-  "args": ["/path/to/databricks-mcp-server/run_server.py"],
-  "env": { "DATABRICKS_CONFIG_PROFILE": "dev" }
-}
-```
-
-Both servers run simultaneously after one IDE reload. This lets you call `export_genie` against `databricks-prod` and `import_genie` against `databricks-dev` within the same conversation — no further reloads needed.
-
-> **Tip:** The Databricks CLI profiles (`prod`, `dev`) referenced above must be defined in `~/.databrickscfg`. Both token-based and OAuth (`auth_type = databricks-cli`) profiles are supported.
-
-##### Full Migration Workflow
-
-**Step 1 — Export from PROD** using the `databricks-prod` MCP server:
-
-```python
-# Call export_genie via the prod-scoped MCP server
-exported = export_genie(space_id="<prod_space_id>")
-# exported keys: warehouse_id, title, description, serialized_space
-# exported["warehouse_id"] is the PROD warehouse — do NOT reuse it for DEV
-```
-
-**Step 2 — Find the DEV warehouse ID:**
-
-```python
-# Call list_warehouses via the dev-scoped MCP server
-list_warehouses()  # note the warehouse_id for the DEV workspace
-```
-
-**Step 3 — Remap the catalog and import into DEV** using the `databricks-dev` MCP server:
-
-```python
-# Catalog name differs between environments — replace ALL occurrences.
-# serialized_space embeds the catalog in table identifiers, SQL FROM clauses,
-# join specs, and filter snippets, so a single string replace covers everything.
-dev_serialized_space = exported["serialized_space"].replace(
-    "my_prod_catalog",
-    "my_dev_catalog"
-)
-
-# Call import_genie via the dev-scoped MCP server
-result = import_genie(
-    warehouse_id="<dev_warehouse_id>",
-    serialized_space=dev_serialized_space,
-    title=exported["title"],
-    description=exported["description"],
-)
-# result["space_id"] is the new DEV space ID
-```
-
-**Step 4 — Save exports locally** for version control and future re-migrations:
-
-```json
-// genie_exports/MySpace.json
-{
-  "space_id": "<prod_space_id>",
-  "title": "MySpace",
-  "description": "<space_description>",
-  "warehouse_id": "<prod_warehouse_id>",
-  "serialized_space": "{ ... }"
-}
-```
-
-## Workflow
-
-```
-1. Inspect tables    → get_table_details
-2. Create space      → create_or_update_genie
-3. Query space       → ask_genie (or test in Databricks UI)
-4. Curate (optional) → Use Databricks UI to add instructions
-5. Export/migrate    → export_genie → import_genie
-```
+> **Cross-workspace migration:** Each MCP server is workspace-scoped. Configure one server entry per workspace profile in your IDE's MCP config, then export from the source server and import via the target server. See [spaces.md §Migration](spaces.md#migrating-across-workspaces-with-catalog-remapping) for the full workflow.
 
 ## Reference Files
 
@@ -225,18 +134,7 @@ Use these skills in sequence:
 
 ## Common Issues
 
-| Issue | Solution |
-|-------|----------|
-| **No warehouse available** | Create a SQL warehouse or provide `warehouse_id` explicitly |
-| **Poor query generation** | Add instructions and sample questions that reference actual column names |
-| **Slow queries** | Ensure warehouse is running; use OPTIMIZE on tables |
-| **`export_genie` returns empty `serialized_space`** | Requires at least CAN EDIT permission on the space |
-| **`import_genie` fails with permission error** | Ensure you have CREATE privileges in the target workspace folder |
-| **Tables not found after migration** | Catalog name was not remapped — replace the source catalog name in `serialized_space` before calling `import_genie` |
-| **Catalog name appears in SQL queries too** | `serialized_space` embeds catalog in table identifiers, SQL FROM clauses, join specs, and filters — a single `.replace(src, tgt)` on the whole string covers all occurrences |
-| **`export_genie` / `import_genie` land in the wrong workspace** | Each MCP server is workspace-scoped. Set up two named MCP server entries (one per profile) in your IDE's MCP config instead of switching a single server's profile mid-session |
-| **MCP server doesn't pick up profile change** | The MCP process reads `DATABRICKS_CONFIG_PROFILE` once at startup — editing the config file requires an IDE reload to take effect |
-| **`import_genie` fails with JSON parse error** | The `serialized_space` string may contain multi-line SQL arrays with `\n` escape sequences; flatten SQL arrays to single-line strings before passing to avoid double-escaping issues |
+See [spaces.md §Troubleshooting](spaces.md#troubleshooting) for a full list of issues and solutions.
 ## Related Skills
 
 - **[databricks-agent-bricks](../databricks-agent-bricks/SKILL.md)** - Use Genie Spaces as agents inside Supervisor Agents
